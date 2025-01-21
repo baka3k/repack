@@ -83,21 +83,28 @@ class CodeSigningUtils {
             return null
         }
 
-        fun verifyBundle(context: Context, token: String?, fileContent: ByteArray?) {
+        fun verifyBundle(
+            context: Context,
+            token: String?,
+            fileContent: ByteArray?,
+            pk: PublicKey?
+        ) {
             if (token == null) {
                 throw Exception("The bundle verification failed because no token for the bundle was found.")
             }
-
-            val stringPublicKey = getPublicKeyFromStringsIfExist(context)
+            var publicKey = pk
+            if (publicKey == null) {
+                // find default
+                val stringPublicKey = getPublicKeyFromStringsIfExist(context)
                     ?: throw Exception("The bundle verification failed because PublicKey was not found in the bundle. Make sure you've added the PublicKey to the res/values/strings.xml under RepackPublicKey key.")
-
-            val publicKey = parsePublicKey(stringPublicKey)
+                publicKey = parsePublicKey(stringPublicKey)
                     ?: throw Exception("The bundle verification failed because the PublicKey is invalid.")
+            }
 
             val claims: Map<String, Any?> = verifyAndDecodeToken(token, publicKey)
 
             val contentHash = claims["hash"] as String?
-                    ?: throw Exception("The bundle verification failed because the token is invalid.")
+                ?: throw Exception("The bundle verification failed because the token is invalid.")
 
             val fileHash = computeHash(fileContent)
 
@@ -105,7 +112,6 @@ class CodeSigningUtils {
                 throw Exception("The bundle verification failed because the bundle hash is invalid.")
             }
         }
-
         fun extractBundleAndToken(fileContent: ByteArray): Pair<ByteArray, String?> {
             // in signed bundles, last 1280 bytes are reserved for the token
             val signatureSize = 1280

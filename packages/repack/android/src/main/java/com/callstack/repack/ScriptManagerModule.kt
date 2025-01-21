@@ -1,24 +1,44 @@
 package com.callstack.repack
 
-import android.os.Handler
 import com.facebook.react.bridge.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
-class ScriptManagerModule(reactContext: ReactApplicationContext) : ScriptManagerSpec(reactContext) {
+/**
+ * DO inject an external scope instead of using GlobalScope.
+ * GlobalScope can be used indirectly. Here as a default parameter makes sense.
+ * refer: https://developer.android.com/kotlin/coroutines/coroutines-best-practices
+ * */
+class ScriptManagerModule(
+    reactContext: ReactApplicationContext,
+    tamperingDetector: TamperingDetector? = null,
+    private val coroutineScope: CoroutineScope = GlobalScope, // just default, not used directly
+    private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : ScriptManagerSpec(reactContext) {
     private val nativeLoader = NativeScriptLoader(reactApplicationContext)
-    private val remoteLoader = RemoteScriptLoader(reactApplicationContext, nativeLoader)
-    private val fileSystemLoader = FileSystemScriptLoader(reactApplicationContext, nativeLoader)
+    private val remoteLoader = RemoteScriptLoader(
+        reactApplicationContext,
+        nativeLoader,
+        tamperingDetector = tamperingDetector
+    )
+
+    private val fileSystemLoader = FileSystemScriptLoader(
+        reactApplicationContext,
+        nativeLoader,
+        tamperingDetector = tamperingDetector
+    )
 
     override fun getName(): String {
         return NAME
     }
 
     private fun runInBackground(fn: () -> Unit) {
-        val handler = Handler()
-        val runnable = Runnable {
+        coroutineScope.launch(coroutineDispatcher) {
             fn()
         }
-        handler.postDelayed(runnable, 0)
-
     }
 
     @ReactMethod
@@ -43,8 +63,8 @@ class ScriptManagerModule(reactContext: ReactApplicationContext) : ScriptManager
 
                 else -> {
                     promise.reject(
-                            ScriptLoadingError.UnsupportedScheme.code,
-                            "Scheme in URL: '${config.url}' is not supported"
+                        ScriptLoadingError.UnsupportedScheme.code,
+                        "Scheme in URL: '${config.url}' is not supported"
                     )
                 }
             }
@@ -67,8 +87,8 @@ class ScriptManagerModule(reactContext: ReactApplicationContext) : ScriptManager
 
                 else -> {
                     promise.reject(
-                            ScriptLoadingError.UnsupportedScheme.code,
-                            "Scheme in URL: '${config.url}' is not supported"
+                        ScriptLoadingError.UnsupportedScheme.code,
+                        "Scheme in URL: '${config.url}' is not supported"
                     )
                 }
             }
@@ -91,8 +111,8 @@ class ScriptManagerModule(reactContext: ReactApplicationContext) : ScriptManager
                     promise.resolve(null)
                 } catch (error: Exception) {
                     promise.reject(
-                            ScriptLoadingError.ScriptInvalidationFailure.code,
-                            "Cannot invalidate some of the scripts"
+                        ScriptLoadingError.ScriptInvalidationFailure.code,
+                        "Cannot invalidate some of the scripts"
                     )
                 }
             }
@@ -104,7 +124,6 @@ class ScriptManagerModule(reactContext: ReactApplicationContext) : ScriptManager
         nativeLoader.evaluate(scriptSource.toByteArray(), scriptSourceUrl)
         return true
     }
-
     companion object {
         init {
             System.loadLibrary("callstack-repack")

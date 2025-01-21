@@ -1,0 +1,17 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="public_key_default">-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAs5ySOVNlOSodkkrGNYFN
+0KHhedAaoe7RPARO13dwbktLMpyCC4GoK3iKIK5uNuCH1+DVltIf7Vrt2/qz7AM0
+Q4kSwKPr8vu5QuE2eAmHOzKwmp1rKayF0/ahHPzajBazkIcRwY4bhaSMqdrtGl+e
++oU8c8+QPU8wKwAbxrFDIJ7vTFuWIPxn1Knm6SEk84pvbbDzXc4cJz1O6ELk2Bhu
+HskdrnyQRBCyEQ30JHZgN/8bWFBZJ+AtGL64uRT7dFpaG5/iAYER9tqnVnCNwuCO
+udRh6aDZtLIRT5ZkeutBzkbQqelZUzB+VhlwzKu+IwsgQtdYPg1Dl9qmAFs2INBl
+Ccuo12IL7m58/xxv8tRo5THBA5xFK+5/XWqLYRzMBH71cfrerj0Stbj8pPFUqsXf
+DdiciubflCAjBIMReDcwt2Ux1IJtfS2kTR9zk5pHn3VIL+6N6kEohKWT66NKykgj
+lgTmabLM/Xg9+rWtZmg5X8tgijdUFT6EWOdsrtzP5vvRDzilM/4g857AOTjduaBS
+XFn7cc7kQ4wNF/g2Axfs7GHFdajfJUWky27qbiLUNzrcCMeWPbkLV8+XV+FcQGUW
+VG81Rxoutndr9GnLCMt7L0f8/RdSgzxnqD2vV3Xmc5b38ojaQBhCnVUoUkvN0auM
+E5z28xTHakU5rhBBYNR9+VcCAwEAAQ==
+-----END PUBLIC KEY-----
+</string>
+</resources>

@@ -1,5 +1,6 @@
 package com.callstack.repack
 
+import android.util.Log
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactContext
 import okhttp3.Call
@@ -7,13 +8,16 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class RemoteScriptLoader(val reactContext: ReactContext, private val nativeLoader: NativeScriptLoader) {
+class RemoteScriptLoader(
+    val reactContext: ReactContext,
+    private val nativeLoader: NativeScriptLoader,
+    private val tamperingDetector: TamperingDetector?
+) {
     private val scriptsDirName = "scripts"
     private val client = OkHttpClient()
 
@@ -29,15 +33,17 @@ class RemoteScriptLoader(val reactContext: ReactContext, private val nativeLoade
         return clientPerRequestBuilder.build()
     }
 
-    private fun downloadAndCache(config: ScriptConfig, onSuccess: () -> Unit, onError: (code: String, message: String) -> Unit) {
+    private fun downloadAndCache(
+        config: ScriptConfig,
+        onSuccess: () -> Unit,
+        onError: (code: String, message: String) -> Unit
+    ) {
         val path = getScriptFilePath(config.uniqueId)
         val file = File(reactContext.filesDir, path)
-
         val callback = object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 onError(
-                        ScriptLoadingError.NetworkFailure.code,
-                        e.message ?: e.toString()
+                    ScriptLoadingError.NetworkFailure.code, e.message ?: e.toString()
                 )
             }
 
@@ -48,43 +54,29 @@ class RemoteScriptLoader(val reactContext: ReactContext, private val nativeLoade
                         if (!scriptsDir.exists()) {
                             File(reactContext.filesDir, scriptsDirName).mkdir()
                         }
-
                         val rawBundle = response.body?.bytes()
-
-                        val (bundle, token) = rawBundle?.let {
-                            CodeSigningUtils.extractBundleAndToken(rawBundle)
-                        } ?: Pair(null, null)
-
-                        if (config.verifyScriptSignature == "strict" || (config.verifyScriptSignature == "lax" && token != null)) {
-                            CodeSigningUtils.verifyBundle(reactContext, token, bundle)
-                        }
-
-                        file.createNewFile()
-
-                        val outputStream = file.outputStream()
-                        val writer = BufferedOutputStream(outputStream)
-                        writer.write(bundle)
-                        writer.close()
+                        tamperingDetector?.extractBundleAndTokenFromDownload(
+                            rawBundle,
+                            file.absolutePath,
+                        )
                         onSuccess()
                     } catch (error: Exception) {
                         onError(
-                                ScriptLoadingError.ScriptCachingFailure.code,
-                                error.message ?: error.toString()
+                            ScriptLoadingError.ScriptCachingFailure.code,
+                            error.message ?: error.toString()
                         )
                     }
                 } else {
                     onError(
-                            ScriptLoadingError.RequestFailure.code,
-                            "Request should have returned with 200 HTTP status, but instead it received ${response.code}"
+                        ScriptLoadingError.RequestFailure.code,
+                        "Request should have returned with 200 HTTP status, but instead it received ${response.code}"
                     )
                 }
             }
         }
 
         val clientPerRequest = createClientPerRequest(config)
-        var request = Request.Builder()
-                .url(config.url)
-                .headers(config.headers)
+        var request = Request.Builder().url(config.url).headers(config.headers)
 
 
         if (config.method == "POST" && config.body != null) {
@@ -95,30 +87,39 @@ class RemoteScriptLoader(val reactContext: ReactContext, private val nativeLoade
     }
 
     fun execute(config: ScriptConfig, promise: Promise) {
+
         val scriptPath = getScriptFilePath(config.uniqueId)
         try {
             val file = File(reactContext.filesDir, scriptPath)
             if (!file.exists()) {
                 throw Exception("Script file does not exist: $file")
             }
-            
+
             val code = FileInputStream(file).use { it.readBytes() }
             if (code.isEmpty()) {
                 throw Exception("Script file exists but could not be read: $file")
             }
-
-            nativeLoader.evaluate(code, config.sourceUrl, promise)
+            if (validateLocalBundle(file)) {
+                nativeLoader.evaluate(code, config.sourceUrl, promise)
+            } else {
+                rejectBundle(promise, SecurityException("Bundle is invalid"))
+            }
         } catch (error: Exception) {
-            promise.reject(
-                    ScriptLoadingError.ScriptEvalFailure.code,
-                    error.message ?: error.toString()
-            )
+            rejectBundle(promise, error)
         }
+    }
+
+    private fun rejectBundle(promise: Promise, error: Exception) {
+        promise.reject(
+            ScriptLoadingError.ScriptEvalFailure.code, error.message ?: error.toString()
+        )
     }
 
 
     fun prefetch(config: ScriptConfig, promise: Promise) {
-        downloadAndCache(config, { promise.resolve(null) }, { code, message -> promise.reject(code, message) })
+        downloadAndCache(config,
+            { promise.resolve(null) },
+            { code, message -> promise.reject(code, message) })
     }
 
     fun load(config: ScriptConfig, promise: Promise) {
@@ -141,6 +142,19 @@ class RemoteScriptLoader(val reactContext: ReactContext, private val nativeLoade
         val file = File(reactContext.filesDir, scriptsDirName)
         if (file.exists()) {
             file.deleteRecursively()
+        }
+    }
+
+    /**
+     * Anti-tampering
+     */
+    @Throws(SecurityException::class)
+    private fun validateLocalBundle(file: File): Boolean {
+        if (tamperingDetector == null) {
+            //bypasss tamperingDetector
+            return true
+        } else {
+            return tamperingDetector.verifyBundle(bundlePath = file.path)
         }
     }
 }
